@@ -1,4 +1,17 @@
 import asyncio
+import sqlite3
+
+conn = sqlite3.connect('bot.db')
+cursor = conn.cursor()
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS reminders (
+        message_id INTEGER PRIMARY KEY,
+        channel_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        
+    )
+""")
 
 import discord
 
@@ -27,30 +40,57 @@ client = discord.Client(intents=intents)
 async def on_ready():
     print(f'We have logged in as {client.user}')
 
+async def copy_message(message):
+    message_files = [await attachment.to_file() for attachment in message.attachments]
+
+    return {
+        'content' : message.content,
+        'tts' : message.tts,
+        'embed' : message.embeds[0] if len(message.embeds) == 1 else None,
+        'embeds' : message.embeds if len(message.embeds) > 1 else None,
+        'file' : message_files[0] if len(message_files) == 1 else None,
+        'files' : message_files if len(message_files) > 1 else None,
+        'stickers' : message.stickers,
+        'reference' : message.reference,
+        'suppress_embeds' : len(message.embeds) == 0,
+        'poll' : message.poll
+    }
+
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    await message.channel.send("waiting for embeds to potentially be removed")
+    try:
+        await message.channel.send("waiting for embeds to potentially be removed")
+    except:
+        print("sending wait message failed")
+        return
 
     await asyncio.sleep(5)
 
-    # print(len(message.embeds))
-    # message = await message.channel.fetch_message(message.id)
-    # print(len(message.embeds))
+    cursor.execute("""
+    INSERT INTO reminders (message_id, channel_id)
+    VALUES (?, ?)
+""", (message.id, message.channel.id))
+    conn.commit()
 
-    message_files = [await attachment.to_file() for attachment in message.attachments]
+    cursor.execute("SELECT message_id, channel_id FROM reminders")
+    rows = cursor.fetchall()
+    for row in rows:
+        print(f"message_id={row[0]}, channel_id={row[1]}")
 
-    await message.channel.send(content=message.content, tts=message.tts, 
-                               embed=message.embeds[0] if len(message.embeds) == 1 else None, embeds=message.embeds if len(message.embeds) > 1 else None,
-                               file=message_files[0] if len(message_files) == 1 else None, files=message_files if len(message_files) > 1 else None, 
-                               stickers=message.stickers, reference=message.reference, 
-                               suppress_embeds = len(message.embeds) == 0,
-                               poll=message.poll)
+    copied_message = {}
+    try:
+        copied_message = await copy_message(message)
+    except:
+        print("copying message failed")
+        return
 
-# @client.event
-# async def on_message_edit(before, after):
-#     print(len(before.embeds), len(after.embeds))
+    try:
+        await message.channel.send(**copied_message)
+    except:
+        print("sending copycat message failed")
+        return
 
 client.run(token)

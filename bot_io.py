@@ -1,171 +1,37 @@
-from datetime import datetime, time, timedelta, timezone
-import re
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-
+import re
 import calendar
+import bot_timing as bt
+import bot_db as bd
 
-# Create mappings for full and short names
-FULL = {name.lower(): idx for idx, name in enumerate(calendar.day_name)}
-ABBR = {name.lower(): idx for idx, name in enumerate(calendar.day_abbr)}
-def weekday_to_int(name: str) -> int | None:
-    """
-    Convert weekday name or abbreviation to integer.
-    Returns None if the name isn't recognized.
-    """
-    n = name.lower()
-    if n in FULL:
-        return FULL[n]
-    if n in ABBR:
-        return ABBR[n]
-    return None
-
-def to_utc(dt: datetime):
-    return dt.astimezone(timezone.utc)
-
-def format_datetime(dt: datetime, is_12_hr: bool = False) -> str:
-    specifier = f"%A, %d %B %Y, {"%I:%M %p" if is_12_hr else "%H:%M"}"
-    return dt.strftime(specifier)
-
-def next_occurrence(now: datetime, year: int|None, month: int|None, day: int|None, hour: int, minute: int, second: int) -> datetime:
-    assert 0 <= hour < 24
-    assert 0 <= minute < 60
-    assert 0 <= second < 60
-    assert (not year and not month and not day) or (not year and month and day) or (year and month and day)
-
-    target = datetime(year if year else now.year,
-                      month if month else now.month,
-                      day if day else now.day,
-                      hour, minute, second, 0, now.tzinfo)
-
-    if target < now:
-        if year and month and day:
-            raise ValueError("The specified time is before now.")
-        if not year and month and day:
-            target = datetime(now.year + 1, month, day,
-                              hour, minute, second, 0, now.tzinfo)
-        if not year and not month and not day:
-            target += timedelta(days=1)
-
-    return target
-
-def n_hours_later(now: datetime, n: int) -> datetime:
-    return now + timedelta(hours=n)
-
-def n_days_later(now: datetime, n: int) -> datetime:
-    return now + timedelta(days=n)
-
-def n_weeks_later(now: datetime, n: int) -> datetime:
-    return now + timedelta(weeks=n)
-
-#tuple of (datetime, warning). warning is when not all months have the day trying to be repeated
-# #if the month selected doesn't have the day needed, it is instead rounded to the last day of the month
-def n_months_later(now: datetime, n: int) -> tuple[datetime, str|None]:
-    warning = None
-
-    new_month = (now.month - 1 + n) % 12 + 1
-    new_year = (now.month - 1 + n) // 12 + now.year
-    _, days_in_month = calendar.monthrange(new_year, new_month)
-    
-    new_day = now.day
-    if now.day > days_in_month:
-        new_day = days_in_month
-        warning = "Reminder clamped to the last day of the month."
-    
-    return (now.replace(year=new_year, month=new_month, day=new_day), warning)
-
-def n_years_later(now: datetime, n: int) -> datetime:
-    return now.replace(year=now.year + n)
-
-TIME_INTERVAL_FUNCTIONS = [n_hours_later, n_days_later, n_weeks_later, n_months_later, n_years_later]
-TIME_INTERVAL_NAMES = ["hour", "day", "week", "month", "year"]
-TIME_INTERVAL_LETTERS = ["h", "d", "w", "m", "y"]
-TIME_INTERVAL_LETTERS_INV = {c: i for i, c in enumerate(TIME_INTERVAL_LETTERS)}
-
-MONTH_ABBRS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-MONTH_ABBRS_INV = {c: i for i, c in enumerate(MONTH_ABBRS)}
-def first_positive_integer_str(s: str) -> str:
-    """
-    Return the first positive integer found in the string.
-    Raise ValueError if:
-      - the first numeric token is negative (e.g., '-5')
-      - zero ('0')
-      - a decimal number (e.g., '3.14')
-      - there is more than one numeric token (integer or decimal) in the string
-    """
-    # Pattern matching optional sign, digits, and optional decimal part
-    token_re = re.compile(r'[-+]?\d+(\.\d+)?')
-    tokens = token_re.findall(s)  # returns list of tuples: group(0) is full match via finditer below
-    
-    # Let's get full matches with finditer to catch actual tokens
-    matches = [m.group(0) for m in token_re.finditer(s)]
-    
-    if not matches:
-        raise ValueError("No integer found")
-    
-    first = matches[0]
-    
-    # Validate the first token
-    if re.fullmatch(r'-\d+', first):
-        raise ValueError(f"Found negative number '{first}'")
-    if re.fullmatch(r'\+?0+', first):
-        raise ValueError(f"Found zero '{first}'")
-    if re.fullmatch(r'[-+]?\d+\.\d+', first):
-        raise ValueError(f"Found decimal number '{first}'")
-    
-    # If there's more than one numeric token, error
-    if len(matches) > 1:
-        raise ValueError(f"Found more than one number: {matches}")
-    
-    # It's a valid positive integer; strip any leading '+'
-    return first.lstrip('+')
-
-# TIME_RE = re.compile(
-#     r'(\d+)\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d\d(?:\d\d)?)\s*(\d\d)\s*:\s*(\d\d)\s*([ap]m)?'
-# )
-# def first_single_time(s: str) -> time:
-#     """
-#     Parse a single time in H:MM or HH:MM format from the string.
-    
-#     Returns:
-#         datetime.time object.
-    
-#     Raises:
-#         ValueError if:
-#           - No valid time is found
-#           - More than one valid time is found
-#           - Specified time is invalid
-#     """
-#     matches = TIME_RE.findall(s)
-#     if not matches:
-#         raise ValueError("No time found in string")
-#     if len(matches) > 1:
-#         raise ValueError("Multiple times found")
-    
-#     hh_str, mm_str, ampm = matches[0]
-#     hh, mm = int(hh_str), int(mm_str)
-    
-#     # Adjust hour based on AM/PM
-#     if ampm:
-#         if hh > 12:
-#             raise ValueError("Invalid time found (hour value greater than 12)")
-        
-#         am = ampm.lower() == 'am'
-#         if am:
-#             if hh == 12:
-#                 hh = 0
-#         else:  # PM
-#             if hh != 12:
-#                 hh += 12
-    
-#     return time(hh, mm)
+class InvalidStartTimeStringError(Exception):
+    pass
+class ZeroDayValueError(Exception):
+    pass
+class TooLargeDayValueError(Exception):
+    pass
+class InvalidDateError(Exception):
+    pass
+class TooLargeMinuteValueError(Exception):
+    pass
+class ZeroHourValueError(Exception):
+    pass
+class TooLargeHourValueError(Exception):
+    pass
+class TooLarge12HourValueError(TooLargeHourValueError):
+    pass
+class TooLarge24HourValueError(TooLargeHourValueError):
+    pass
 
 START_RE = re.compile(
     r'\s*(?:(\d+)\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d\d\d\d)?)?\s*(\d?\d)\s*:\s*(\d\d)\s*([ap]m)?\s*'
 )
-def parse_start_str(start_str: str, now: datetime) -> datetime:
+#returns tuple of (start_time, is_12_hr)
+def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     m = re.fullmatch(START_RE, start_str.lower())
     if m == None:
-        raise ValueError("Failed to parse start string")
+        raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid)")
     
     day_str = m[1]
     month_abbr_str = m[2]
@@ -174,44 +40,43 @@ def parse_start_str(start_str: str, now: datetime) -> datetime:
     min_str = m[5]
     ampm_str = m[6]
 
-    print(day_str, month_abbr_str, year_str, hour_str, min_str, ampm_str)
-
     #read in date
     start = None
     if not day_str: #only time provided
-        start = datetime(now.year, now.month, now.day)
+        start = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
     else:
         year = int(year_str) if year_str else now.year
-        month = MONTH_ABBRS_INV[month_abbr_str] + 1 #datetime expects 1-indexed
+        month = bt.MONTH_ABBRS_INV[month_abbr_str] + 1 #datetime expects 1-indexed
         day = int(day_str)
         _, days_in_month = calendar.monthrange(year, month)
         if day == 0:
-            raise ValueError("Day value is 0")
+            raise ZeroDayValueError("Start time day value is 0")
         if day > days_in_month:
-            raise ValueError("Day value is too large for that month")
+            raise TooLargeDayValueError(f"Start time day value is too large for that month (day value is {day} and highest allowed day value is {days_in_month})")
         try:
-            start = datetime(year, month, day)
+            start = datetime(year, month, day, tzinfo=now.tzinfo)
         except:
-            raise ValueError("Date is invalid")
+            raise InvalidDateError("Date is invalid")
     
     #read in time
     hour = int(hour_str)
     min = int(min_str)
     if min > 59:
-        raise ValueError("Minute value is too large")
-    if ampm_str:
+        raise TooLargeMinuteValueError(f"Minute value is too large (minute value is {min} and highest allowed minute is 59)")
+    is_12_hr = ampm_str != None
+    if is_12_hr:
         am = ampm_str.lower()[0] == 'a'
         if am:
             if hour == 0:
-                raise ValueError("Hour value is 0 in 12 hour time")
+                raise ZeroHourValueError("Hour value is 0 in 12 hour time (lowest allowed hour value is 1)")
             if hour > 12:
-                raise ValueError("Hour value is too large for 12 hour time")
+                raise TooLarge12HourValueError(f"Hour value is too large for 12 hour time (hour value is {hour} and highest allowed hour value is 12)")
 
             if hour == 12:
                 hour = 0
         else:
             if hour > 23:
-                raise ValueError("Hour value is too large for 24 hour time")
+                raise TooLarge24HourValueError("Hour value is too large for 24 hour time (hour value is {hour} and highest allowed hour value is 24)")
 
             if hour != 12:
                 hour += 12
@@ -219,29 +84,38 @@ def parse_start_str(start_str: str, now: datetime) -> datetime:
     start = start.replace(hour=hour, minute=min, second=0, microsecond=0)
 
     if start < now:
-        raise ValueError("Start is before the current time")
+        if not day_str: #so you can specify a time in the next day without an annoying error
+            start += timedelta(days=1)
+        raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)})")
     
-    return start
+    return (start, is_12_hr)
 
+class InvalidRepeatStringError(Exception):
+    pass
+class ZeroRepeatTimeError(Exception):
+    pass
 
 REPEAT_RE = re.compile(r"\s*(\d*)\s*([hdwmy])\w*\s*")
 #tuple of (time_interval_index, n (like in n_months_later))
 def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     m = re.fullmatch(REPEAT_RE, repeat_str.lower())
     if m == None:
-        raise ValueError("Failed to parse repeat string")
+        raise InvalidRepeatStringError("Failed to parse repeat string")
     n = int(m[1])
     if n == 0:
-        raise ValueError("Repeat time cannot be 0")
-    time_interval_index = TIME_INTERVAL_LETTERS_INV[m[2]]
+        raise ZeroRepeatTimeError("Repeat time is 0")
+    time_interval_index = bt.TIME_INTERVAL_LETTERS_INV[m[2]]
     return (time_interval_index, n)
+
+class NoNameParameterError(Exception):
+    pass
 
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, message)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
-def parse_set_reminder(input: str, now: datetime) -> tuple[datetime, int|None, int|None, str, str]:
+def parse_set_reminder(input: str, now: datetime, user_has_tz: bool) -> tuple[datetime, int|None, int|None, str, str]:
     name_index = input.find("name:")
     if name_index == -1:
-        raise ValueError("No name parameter given! Type \"!help set_reminder\" for usage of this command")
+        raise NoNameParameterError("No name parameter given")
 
     name = ""
     repeat_index = input.find("repeat:")
@@ -260,13 +134,129 @@ def parse_set_reminder(input: str, now: datetime) -> tuple[datetime, int|None, i
             repeat_str = input[repeat_index + 7:name_index]
         time_interval_index, n = parse_repeat_str(repeat_str)
     start_str = input[:min(name_index, repeat_index) if repeat_index != -1 else name_index]
-    print(start_str)
-    start_time = parse_start_str(start_str, now)
+    start_time, is_12_hr = parse_start_str(start_str, now)
     name = name.strip()
 
-    return (start_time, time_interval_index, n, name, "")
+    msg = f"Reminder set for {bt.format_datetime(start_time, is_12_hr)} local time"
+    if start_time.tzinfo != bt.UTC:
+        msg += f" ({bt.format_datetime(bt.to_utc(start_time), is_12_hr)} UTC)"
+    if time_interval_index != None: #has repeat
+        if n != 1:
+            msg += f" and will repeat every {n} {bt.TIME_INTERVAL_NAMES[time_interval_index]}s."
+        else:
+            msg += f" and will repeat every {bt.TIME_INTERVAL_NAMES[time_interval_index]}."
+    else:
+        msg += "."
 
+    if time_interval_index == 3 and start_time.day > 28: #month
+        msg += f"\n\nNote: reminder is set to repeat per month, but some months have less than {start_time.day} days."
+        msg += " On these months, the reminder will be shifted to the last day of the month."
+    
+    if not user_has_tz:
+        msg += f"\n\nNote: you have not set your timezone, so UTC is assumed. If you want, set your timezone with {COMMAND_PREFIX}{COMMAND_NAMES[3]}."
 
-#     n = None
-#     time_interval_index = None
+    return (start_time, time_interval_index, n, name, msg)
 
+def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    user_tz = bt.UTC
+    user_has_tz = False
+    try:
+        user_tz_str = bd.get_user_timezone(user_id)
+        user_tz = ZoneInfo(user_tz_str)
+        user_has_tz = True
+    except:
+        pass
+
+    now = datetime.now(user_tz)
+
+    start_time, repeat_interval_index, repeat_interval_increment, name, msg = None, None, None, None, None
+    try:
+        start_time, repeat_interval_index, repeat_interval_increment, name, msg = parse_set_reminder(input, now, user_has_tz)
+    except Exception as e:
+        return f"Parsing reminder failed! Error: {str(e)}."
+    
+    try:
+        bd.add_reminder(name, channel_id, reply_message_id, user_id, start_time, repeat_interval_index, repeat_interval_increment)
+    except Exception as e:
+        msg = f"Adding reminder failed! Error: {str(e)}."
+        if type(e) == bd.ReminderAlreadyExistsError:
+            msg += f"\n\nNote: You can remove a reminder using {COMMAND_PREFIX}{COMMAND_NAMES[1]}."
+        return msg
+    
+    return msg
+
+def remove_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    name = input.strip()
+
+    try:
+        bd.remove_reminder(name, channel_id) #TODO: verify perms somewhere!!!
+    except Exception as e:
+        return f"Removing reminder failed! Error: {str(e)}."
+    
+    return f"Removed reminder '{name}'."
+
+def list_reminders(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    reminders = bd.get_all_reminders(channel_id)
+    if len(reminders) == 0:
+        return "There are no reminders in this channel."
+    
+    names = [r[0] for r in reminders]
+    return f"All reminders in this channel: {", ".join(names)}"
+
+def set_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    tz_name = input.strip()
+
+    try:
+        ZoneInfo(tz_name)
+    except Exception as e:
+        return f"Setting timezone failed! Error: {tz_name} is not a valid timezone name."
+
+    bd.set_user_timezone(user_id, tz_name)
+    return f"Set timezone to {tz_name}."
+
+def get_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    try:
+        return f"User timezone is {bd.get_user_timezone(user_id)}"
+    except Exception as e:
+        return f"Getting timezone failed! Error: {str(e)}"
+
+def remove_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+    try:
+        bd.remove_user_timezone(user_id)
+    except Exception as e:
+        return f"Removing timezone failed! Error: {str(e)}."
+    
+    return f"User timezone removed."
+
+def parse_command(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str|None:
+    if input[:2] != COMMAND_PREFIX:
+        return 
+    
+    command_name = input[2:].split(maxsplit=1)[0]
+    command_index = None
+    try:
+        command_index = COMMAND_NAMES_INV[command_name]
+    except:
+        return f"Command {command_name} does not exist."
+    
+    command_args = input[2+len(command_name):]
+    return COMMAND_FUNCTIONS[command_index](command_args, channel_id, user_id, reply_message_id)
+
+COMMAND_PREFIX = "!!"
+COMMAND_NAMES = [
+    "add_reminder",
+    "remove_reminder",
+    "list_reminders",
+    "set_timezone",
+    "get_timezone",
+    "remove_timezone"
+]
+COMMAND_NAMES_INV = {c: i for i, c in enumerate(COMMAND_NAMES)}
+COMMAND_FUNCTIONS = [
+    add_reminder,
+    remove_reminder,
+    list_reminders,
+    set_timezone,
+    get_timezone,
+    remove_timezone,
+]

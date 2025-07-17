@@ -95,7 +95,7 @@ class InvalidRepeatStringError(Exception):
 class ZeroRepeatTimeError(Exception):
     pass
 
-REPEAT_RE = re.compile(r"\s*(\d*)\s*([hdwmy])\w*\s*")
+REPEAT_RE = re.compile(r"\s*(\d*)\s*(mi|ho|da|we|mo|ye)\w*\s*")
 #tuple of (time_interval_index, n (like in n_months_later))
 def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     m = re.fullmatch(REPEAT_RE, repeat_str.lower())
@@ -104,7 +104,7 @@ def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     n = int(m[1])
     if n == 0:
         raise ZeroRepeatTimeError("Repeat time is 0")
-    time_interval_index = bt.TIME_INTERVAL_LETTERS_INV[m[2]]
+    time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
     return (time_interval_index, n)
 
 class NoNameParameterError(Exception):

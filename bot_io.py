@@ -2,9 +2,12 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import re
 import calendar
+
+import discord
 import bot_timing as bt
 import bot_db as bd
 import bot_response as br
+import bot_permissions as bp
 
 class InvalidStartTimeStringError(Exception):
     pass
@@ -150,9 +153,9 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
     response.txt += "."
     if repeat_interval_index is not None: #has repeat
         if n != 1:
-            response.txt += f"\n**Repeat:** every {n} {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}s."
+            response.txt += f"\n**Repeat:** Every {n} {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}s."
         else:
-            response.txt += f"\n**Repeat:** every {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}."
+            response.txt += f"\n**Repeat:** Every {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}."
 
     if repeat_interval_index == 3 and start_time.day > 28: #month
         response.warnings.append(f"Reminder is set to repeat per month, but some months have less than {start_time.day} days." +
@@ -164,7 +167,12 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
 
     return (start_time, repeat_interval_index, n, name, response)
 
-def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
+    if not user_perms >= bp.EDIT_REMINDERS:
+        return bp.make_lacking_perms_response(f"{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]}",
+                                              user_name,
+                                              bp.EDIT_REMINDERS)
+
     user_tz = bt.UTC
     user_has_tz = False
     try:
@@ -191,7 +199,7 @@ def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: in
         bd.add_reminder(name, channel_id, reply_message_id, user_id, start_time, repeat_interval_index, repeat_interval_increment)
     except Exception as e:
         notes = [USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
-        if type(e) == bd.ReminderAlreadyExistsError:
+        if isinstance(e, bd.ReminderAlreadyExistsError):
             notes.append(f"Note: You can remove a reminder using {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}.")
 
         return br.Response(
@@ -203,7 +211,12 @@ def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: in
     
     return response
 
-def remove_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def remove_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
+    if not user_perms >= bp.EDIT_REMINDERS:
+        return bp.make_lacking_perms_response(f"{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}",
+                                              user_name,
+                                              bp.EDIT_REMINDERS)
+    
     name = input.strip()
 
     try:
@@ -220,7 +233,7 @@ def remove_reminder(input: str, channel_id: int, user_id: int, reply_message_id:
         title=f"Removed reminder '{name}'."
     )
 
-def list_reminders(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     reminders = bd.get_all_reminders(channel_id)
     if len(reminders) == 0:
         return br.Response(
@@ -233,7 +246,7 @@ def list_reminders(input: str, channel_id: int, user_id: int, reply_message_id: 
         txt=", ".join(names)
     )
 
-def set_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def set_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     tz_name = input.strip()
 
     try:
@@ -251,7 +264,7 @@ def set_timezone(input: str, channel_id: int, user_id: int, reply_message_id: in
         title=f"Set timezone to {tz_name}."
     )
 
-def get_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def get_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     try:
         return br.Response(
             title=f"User timezone is {bd.get_user_timezone(user_id)}."
@@ -264,7 +277,7 @@ def get_timezone(input: str, channel_id: int, user_id: int, reply_message_id: in
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[get_timezone]]]
         )
 
-def remove_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
+def remove_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     try:
         bd.remove_user_timezone(user_id)
     except Exception as e:
@@ -280,7 +293,7 @@ def remove_timezone(input: str, channel_id: int, user_id: int, reply_message_id:
 def help(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response|None:
     return br.Response(title="Help:")
 
-def parse_command(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response|None:
+def parse_command(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response|None:
     if input[:len(COMMAND_PREFIX)] != COMMAND_PREFIX:
         return 
     
@@ -296,7 +309,7 @@ def parse_command(input: str, channel_id: int, user_id: int, reply_message_id: i
         )
     
     command_args = input[len(COMMAND_PREFIX)+len(command_name):]
-    return COMMAND_FUNCTIONS[command_index](command_args, channel_id, user_id, reply_message_id)
+    return COMMAND_FUNCTIONS[command_index](command_args, channel_id, user_id, user_name, user_perms, reply_message_id)
 
 COMMAND_PREFIX = "!!"
 COMMAND_NAMES = [

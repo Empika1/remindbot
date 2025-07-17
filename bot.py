@@ -1,11 +1,10 @@
-import asyncio
 from datetime import datetime
 import discord
 from discord.ext import tasks
 import bot_io as bi
-import bot_timing as bt
 import bot_db as bd
 import bot_response as br
+import bot_permissions as bp
 
 # application_id = 1393603955392647299
 # public_key = '6da30fd7129bb4b05100ebf9aa8bfa1454c3d941d08281fc9e2043cc892dd2fa'
@@ -47,11 +46,21 @@ async def copy_message(message):
 
 @client.event
 async def on_message(message: discord.message.Message):
+    if message.author == client.user:
+        return
+
     response = None
     try:
+        perms = bp.ADMIN
+        #permissions don't matter in a dm channel
+        if not isinstance(message.channel, discord.DMChannel):
+            perms = message.channel.permissions_for(message.author) # type: ignore
+
         response = bi.parse_command(message.content, 
                                     message.channel.id, 
                                     message.author.id, 
+                                    message.author.name,
+                                    perms,
                                     message.reference.message_id if message.reference is not None else None)
         if response is None:
             return
@@ -62,6 +71,15 @@ async def on_message(message: discord.message.Message):
         )
 
     await message.channel.send(embed=response.make_embed())
+
+async def get_channel_or_dm(channel_id: int, user_id: int):
+    channel = await client.fetch_channel(channel_id)
+    if channel is None:
+        user = await client.fetch_user(user_id)
+        if user is None:
+            return None
+        channel = user.dm_channel
+    return channel
 
 @tasks.loop(seconds=5)
 async def event_loop():
@@ -74,7 +92,7 @@ async def event_loop():
         for (name, channel_id, reply_message_id, setter_user_id, start_timestamp, next_timestamp, 
         has_repeat, repeat_interval_index, repeat_interval_increment, repeat_increment_count) in due_reminders:
             # type ignores are because any channel in the database must be messageable already, so the type checking is overkill
-            channel = client.get_channel(channel_id)
+            channel = await get_channel_or_dm(channel_id, setter_user_id)
 
             reminder_response = br.Response(
                 title=f"Reminder: {name}"

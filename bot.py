@@ -5,6 +5,7 @@ from discord.ext import tasks
 import bot_io as bi
 import bot_timing as bt
 import bot_db as bd
+import bot_response as br
 
 # application_id = 1393603955392647299
 # public_key = '6da30fd7129bb4b05100ebf9aa8bfa1454c3d941d08281fc9e2043cc892dd2fa'
@@ -46,14 +47,21 @@ async def copy_message(message):
 
 @client.event
 async def on_message(message: discord.message.Message):
-    response = bi.parse_command(message.content, 
-                                message.channel.id, 
-                                message.author.id, 
-                                message.reference.message_id if message.reference else None)
-    if not response:
-        return
-    
-    await message.channel.send(response)
+    response = None
+    try:
+        response = bi.parse_command(message.content, 
+                                    message.channel.id, 
+                                    message.author.id, 
+                                    message.reference.message_id if message.reference is not None else None)
+        if response is None:
+            return
+    except:
+        response = br.Response(
+            is_error=True,
+            title="An unexpected error occured.."
+        )
+
+    await message.channel.send(embed=response.make_embed())
 
 @tasks.loop(seconds=5)
 async def event_loop():
@@ -65,9 +73,15 @@ async def event_loop():
 
         for (name, channel_id, reply_message_id, setter_user_id, start_timestamp, next_timestamp, 
         has_repeat, repeat_interval_index, repeat_interval_increment, repeat_increment_count) in due_reminders:
-            channel = await client.fetch_channel(channel_id)
-            await channel.send(f"Reminder: {name}") # type: ignore
-            if reply_message_id:
+            # type ignores are because any channel in the database must be messageable already, so the type checking is overkill
+            channel = client.get_channel(channel_id)
+
+            reminder_response = br.Response(
+                title=f"Reminder: {name}"
+            )
+            await channel.send(embed=reminder_response.make_embed()) # type: ignore
+
+            if reply_message_id is not None:
                 reply_message = await channel.fetch_message(reply_message_id) # type: ignore
                 await channel.send(**await copy_message(reply_message)) # type: ignore
         

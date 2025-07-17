@@ -41,7 +41,7 @@ def add_reminder(name: str, channel_id: int, reply_message_id: int|None, user_id
         SELECT 1 FROM reminders WHERE name = ? AND channel_id = ?
     """, (name, channel_id))
     
-    if cursor.fetchone():
+    if cursor.fetchone() is not None:
         raise ReminderAlreadyExistsError(f"Reminder with name '{name}' already exists in channel {channel_id}")
 
     start_timestamp = start_time.timestamp()
@@ -71,7 +71,7 @@ def remove_reminder(name: str, channel_id: int):
     """, (name, channel_id))
     
     row = cursor.fetchone()
-    if not row:
+    if row is None:
         raise ReminderDoesntExistError(f"Reminder with name '{name}' doesn't exist in channel {channel_id}")
 
     # Perform the deletion
@@ -99,7 +99,7 @@ class UserNotInDatabaseError(Exception):
 def get_user_timezone(user_id: int) -> str:
     cursor.execute("SELECT timezone FROM users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
-    if row:
+    if row is not None:
         return row[0]
     else:
         raise UserNotInDatabaseError("User doesn't have a set timezone")
@@ -114,7 +114,7 @@ def remove_user_timezone(user_id: int):
     """, (user_id,))
     
     row = cursor.fetchone()
-    if not row:
+    if row is None:
         raise UserNotInDatabaseError("User doesn't have a set timezone")
 
     # Perform the deletion
@@ -155,7 +155,8 @@ def update_reminders(now: datetime):
         cursor.execute("""
             SELECT timezone FROM users WHERE id = ?
         """, (setter_user_id,))
-        timezone_string = cursor.fetchone()[0]
+        timezone_row = cursor.fetchone()
+        timezone_string = timezone_row[0] if timezone_row is not None else 'UTC'
         timezone = ZoneInfo(timezone_string)
 
         start_time = datetime.fromtimestamp(start_timestamp, timezone)

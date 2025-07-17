@@ -4,6 +4,7 @@ import re
 import calendar
 import bot_timing as bt
 import bot_db as bd
+import bot_response as br
 
 class InvalidStartTimeStringError(Exception):
     pass
@@ -30,7 +31,7 @@ START_RE = re.compile(
 #returns tuple of (start_time, is_12_hr)
 def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     m = re.fullmatch(START_RE, start_str.lower())
-    if m == None:
+    if m is None:
         raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid)")
     
     day_str = m[1]
@@ -42,10 +43,10 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
 
     #read in date
     start = None
-    if not day_str: #only time provided
+    if day_str is None: #only time provided
         start = datetime(now.year, now.month, now.day, tzinfo=now.tzinfo)
     else:
-        year = int(year_str) if year_str else now.year
+        year = int(year_str) if year_str is not None else now.year
         month = bt.MONTH_ABBRS_INV[month_abbr_str] + 1 #datetime expects 1-indexed
         day = int(day_str)
         _, days_in_month = calendar.monthrange(year, month)
@@ -63,28 +64,28 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     min = int(min_str)
     if min > 59:
         raise TooLargeMinuteValueError(f"Minute value is too large (minute value is {min} and highest allowed minute is 59)")
-    is_12_hr = ampm_str != None
+    is_12_hr = ampm_str is not None
     if is_12_hr:
+        if hour == 0:
+            raise ZeroHourValueError("Hour value is 0 in 12 hour time (lowest allowed hour value is 1)")
+        if hour > 12:
+            raise TooLarge12HourValueError(f"Hour value is too large for 12 hour time (hour value is {hour} and highest allowed hour value is 12)")
+
         am = ampm_str.lower()[0] == 'a'
         if am:
-            if hour == 0:
-                raise ZeroHourValueError("Hour value is 0 in 12 hour time (lowest allowed hour value is 1)")
-            if hour > 12:
-                raise TooLarge12HourValueError(f"Hour value is too large for 12 hour time (hour value is {hour} and highest allowed hour value is 12)")
-
             if hour == 12:
                 hour = 0
         else:
-            if hour > 23:
-                raise TooLarge24HourValueError("Hour value is too large for 24 hour time (hour value is {hour} and highest allowed hour value is 24)")
-
             if hour != 12:
                 hour += 12
+    else:
+        if hour > 23:
+            raise TooLarge24HourValueError("Hour value is too large for 24 hour time (hour value is {hour} and highest allowed hour value is 23)")
     
     start = start.replace(hour=hour, minute=min, second=0, microsecond=0)
 
     if start < now:
-        if not day_str: #so you can specify a time in the next day without an annoying error
+        if day_str is None: #so you can specify a time in the next day without an annoying error
             start += timedelta(days=1)
         raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)})")
     
@@ -99,7 +100,7 @@ REPEAT_RE = re.compile(r"\s*(\d*)\s*(mi|ho|da|we|mo|ye)\w*\s*")
 #tuple of (time_interval_index, n (like in n_months_later))
 def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     m = re.fullmatch(REPEAT_RE, repeat_str.lower())
-    if m == None:
+    if m is None:
         raise InvalidRepeatStringError("Failed to parse repeat string")
     n = int(m[1])
     if n == 0:
@@ -107,57 +108,63 @@ def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
     return (time_interval_index, n)
 
-class NoNameParameterError(Exception):
+class NoTimeParameterError(Exception):
     pass
 
-# tuple of (start_time, time_interval_index, n (like in n_months_later), name, message)
+# tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
-def parse_set_reminder(input: str, now: datetime, user_has_tz: bool) -> tuple[datetime, int|None, int|None, str, str]:
-    name_index = input.find("name:")
-    if name_index == -1:
-        raise NoNameParameterError("No name parameter given")
+def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None) -> tuple[datetime, int|None, int|None, str, br.Response]:
+    start_time_arg = "time:"
+    repeat_arg = "repeat:"
+
+    start_time_index = input.find(start_time_arg)
+    if start_time_index == -1:
+        raise NoTimeParameterError("No start time given")
 
     name = ""
-    repeat_index = input.find("repeat:")
-    start_str = ""
-    time_interval_index = None
+    repeat_index = input.find(repeat_arg)
+    start_time_str = ""
+    repeat_interval_index = None
     n = None
     if repeat_index == -1:
-        name = input[name_index + 5:]
+        start_time_str = input[start_time_index + len(start_time_arg):]
+        name = input[:start_time_index].strip()
     else:
         repeat_str = ""
-        if name_index < repeat_index:
-            name = input[name_index + 5:repeat_index]
-            repeat_str = input[repeat_index + 7:]
+        if start_time_index < repeat_index:
+            start_time_str = input[start_time_index + len(start_time_arg):repeat_index]
+            repeat_str = input[repeat_index + len(repeat_arg):]
         else:
-            name = input[name_index + 5:]
-            repeat_str = input[repeat_index + 7:name_index]
-        time_interval_index, n = parse_repeat_str(repeat_str)
-    start_str = input[:min(name_index, repeat_index) if repeat_index != -1 else name_index]
-    start_time, is_12_hr = parse_start_str(start_str, now)
-    name = name.strip()
+            start_time_str = input[start_time_index + len(start_time_arg):]
+            repeat_str = input[repeat_index + len(repeat_arg):start_time_index]
+        repeat_interval_index, n = parse_repeat_str(repeat_str)
+        name = input[:min(start_time_index, repeat_index)].strip()
+    start_time, is_12_hr = parse_start_str(start_time_str, now)
 
-    msg = f"Reminder set for {bt.format_datetime(start_time, is_12_hr)} local time"
+    response = br.Response(
+        title=f"Reminder '{name}' set{" with custom message" if reply_message_id is not None else ""}:",
+        txt=f"**Time:** {bt.format_datetime(start_time, is_12_hr)} {"local time" if user_has_tz else "UTC"}"
+    )
     if start_time.tzinfo != bt.UTC:
-        msg += f" ({bt.format_datetime(bt.to_utc(start_time), is_12_hr)} UTC)"
-    if time_interval_index != None: #has repeat
+        response.txt += f" ({bt.format_datetime(bt.to_utc(start_time), is_12_hr)} UTC)"
+    response.txt += "."
+    if repeat_interval_index is not None: #has repeat
         if n != 1:
-            msg += f" and will repeat every {n} {bt.TIME_INTERVAL_NAMES[time_interval_index]}s."
+            response.txt += f"\n**Repeat:** every {n} {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}s."
         else:
-            msg += f" and will repeat every {bt.TIME_INTERVAL_NAMES[time_interval_index]}."
-    else:
-        msg += "."
+            response.txt += f"\n**Repeat:** every {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}."
 
-    if time_interval_index == 3 and start_time.day > 28: #month
-        msg += f"\n\nNote: reminder is set to repeat per month, but some months have less than {start_time.day} days."
-        msg += " On these months, the reminder will be shifted to the last day of the month."
+    if repeat_interval_index == 3 and start_time.day > 28: #month
+        response.warnings.append(f"Reminder is set to repeat per month, but some months have less than {start_time.day} days." +
+                              " On these months, the reminder will be shifted to the last day of the month.")
     
     if not user_has_tz:
-        msg += f"\n\nNote: you have not set your timezone, so UTC is assumed. If you want, set your timezone with {COMMAND_PREFIX}{COMMAND_NAMES[3]}."
+        response.notes.append(f"You have not set your timezone, so UTC is assumed. Consider setting your timezone with" +
+                              f" {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}.")
 
-    return (start_time, time_interval_index, n, name, msg)
+    return (start_time, repeat_interval_index, n, name, response)
 
-def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     user_tz = bt.UTC
     user_has_tz = False
     try:
@@ -169,77 +176,126 @@ def add_reminder(input: str, channel_id: int, user_id: int, reply_message_id: in
 
     now = datetime.now(user_tz)
 
-    start_time, repeat_interval_index, repeat_interval_increment, name, msg = None, None, None, None, None
+    start_time, repeat_interval_index, repeat_interval_increment, name, response = None, None, None, None, None
     try:
-        start_time, repeat_interval_index, repeat_interval_increment, name, msg = parse_set_reminder(input, now, user_has_tz)
+        start_time, repeat_interval_index, repeat_interval_increment, name, response = parse_set_reminder(input, now, user_has_tz, reply_message_id)
     except Exception as e:
-        return f"Parsing reminder failed! Error: {str(e)}."
+        return br.Response(
+            is_error = True,
+            title="Parsing reminder failed:",
+            txt=f"{str(e)}.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
+        )
     
     try:
         bd.add_reminder(name, channel_id, reply_message_id, user_id, start_time, repeat_interval_index, repeat_interval_increment)
     except Exception as e:
-        msg = f"Adding reminder failed! Error: {str(e)}."
+        notes = [USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
         if type(e) == bd.ReminderAlreadyExistsError:
-            msg += f"\n\nNote: You can remove a reminder using {COMMAND_PREFIX}{COMMAND_NAMES[1]}."
-        return msg
-    
-    return msg
+            notes.append(f"Note: You can remove a reminder using {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}.")
 
-def remove_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+        return br.Response(
+            is_error = True,
+            title="Adding reminder failed:",
+            txt=f"{str(e)}.",
+            notes=notes
+        )
+    
+    return response
+
+def remove_reminder(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     name = input.strip()
 
     try:
         bd.remove_reminder(name, channel_id) #TODO: verify perms somewhere!!!
     except Exception as e:
-        return f"Removing reminder failed! Error: {str(e)}."
+        return br.Response(
+            is_error = True,
+            title="Removing reminder failed:",
+            txt=f"{str(e)}.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_reminder]]]
+        )
     
-    return f"Removed reminder '{name}'."
+    return br.Response(
+        title=f"Removed reminder '{name}'."
+    )
 
-def list_reminders(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+def list_reminders(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     reminders = bd.get_all_reminders(channel_id)
     if len(reminders) == 0:
-        return "There are no reminders in this channel."
+        return br.Response(
+            title="There are no reminders in this channel."
+        )
     
     names = [r[0] for r in reminders]
-    return f"All reminders in this channel: {", ".join(names)}"
+    return br.Response(
+        title="All reminders in this channel:",
+        txt=", ".join(names)
+    )
 
-def set_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+def set_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     tz_name = input.strip()
 
     try:
         ZoneInfo(tz_name)
-    except Exception as e:
-        return f"Setting timezone failed! Error: {tz_name} is not a valid timezone name."
+    except:
+        return br.Response(
+            is_error = True,
+            title="Setting timezone failed:",
+            txt=f"{tz_name} is not a valid timezone name.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[set_timezone]]]
+        )
 
     bd.set_user_timezone(user_id, tz_name)
-    return f"Set timezone to {tz_name}."
+    return br.Response(
+        title=f"Set timezone to {tz_name}."
+    )
 
-def get_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+def get_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     try:
-        return f"User timezone is {bd.get_user_timezone(user_id)}"
+        return br.Response(
+            title=f"User timezone is {bd.get_user_timezone(user_id)}."
+        )
     except Exception as e:
-        return f"Getting timezone failed! Error: {str(e)}"
+        return br.Response(
+            is_error = True,
+            title="Getting timezone failed:",
+            txt=f"{str(e)}.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[get_timezone]]]
+        )
 
-def remove_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str:
+def remove_timezone(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response:
     try:
         bd.remove_user_timezone(user_id)
     except Exception as e:
-        return f"Removing timezone failed! Error: {str(e)}."
+        return br.Response(
+            is_error=True,
+            title="Removing timezone failed:",
+            txt=f"{str(e)}.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_timezone]]]
+        )
     
-    return f"User timezone removed."
+    return br.Response(title="User timezone removed.")
 
-def parse_command(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> str|None:
-    if input[:2] != COMMAND_PREFIX:
+def help(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response|None:
+    return br.Response(title="Help:")
+
+def parse_command(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response|None:
+    if input[:len(COMMAND_PREFIX)] != COMMAND_PREFIX:
         return 
     
-    command_name = input[2:].split(maxsplit=1)[0]
+    command_name = input[len(COMMAND_PREFIX):].split(maxsplit=1)[0]
     command_index = None
     try:
         command_index = COMMAND_NAMES_INV[command_name]
     except:
-        return f"Command {command_name} does not exist."
+        return br.Response(
+            is_error=True,
+            title=f"Command {command_name} does not exist.",
+            notes=[USE_HELP_NOTE]
+        )
     
-    command_args = input[2+len(command_name):]
+    command_args = input[len(COMMAND_PREFIX)+len(command_name):]
     return COMMAND_FUNCTIONS[command_index](command_args, channel_id, user_id, reply_message_id)
 
 COMMAND_PREFIX = "!!"
@@ -249,7 +305,8 @@ COMMAND_NAMES = [
     "list_reminders",
     "set_timezone",
     "get_timezone",
-    "remove_timezone"
+    "remove_timezone",
+    "help"
 ]
 COMMAND_NAMES_INV = {c: i for i, c in enumerate(COMMAND_NAMES)}
 COMMAND_FUNCTIONS = [
@@ -259,4 +316,10 @@ COMMAND_FUNCTIONS = [
     set_timezone,
     get_timezone,
     remove_timezone,
+    help,
 ]
+COMMAND_FUNCTIONS_INV = {c: i for i, c in enumerate(COMMAND_FUNCTIONS)}
+
+USE_HELP_NOTE = f"Use {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} to see the list of available commands."
+USE_HELP_COMMAND_NOTES = [f"Use {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} {COMMAND_NAMES[i]} to learn how to use {COMMAND_NAMES[i]}." 
+                          for i in range(len(COMMAND_NAMES))]

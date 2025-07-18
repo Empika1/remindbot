@@ -163,13 +163,13 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
     
     if not user_has_tz:
         response.notes.append(f"You have not set your timezone, so UTC is assumed. Consider setting your timezone with" +
-                              f" {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}.")
+                              f" `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}`.")
 
     return (start_time, repeat_interval_index, n, name, response)
 
 def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     if not user_perms >= bp.EDIT_REMINDERS:
-        return bp.make_lacking_perms_response(f"{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]}",
+        return bp.make_lacking_perms_response(f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]}`",
                                               user_name,
                                               bp.EDIT_REMINDERS)
 
@@ -200,7 +200,7 @@ def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
     except Exception as e:
         notes = [USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
         if isinstance(e, bd.ReminderAlreadyExistsError):
-            notes.append(f"Note: You can remove a reminder using {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}.")
+            notes.append(f"Note: You can remove a reminder using `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}`.")
 
         return br.Response(
             is_error = True,
@@ -213,7 +213,7 @@ def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
 
 def remove_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     if not user_perms >= bp.EDIT_REMINDERS:
-        return bp.make_lacking_perms_response(f"{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}",
+        return bp.make_lacking_perms_response(f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}`",
                                               user_name,
                                               bp.EDIT_REMINDERS)
     
@@ -293,10 +293,10 @@ def remove_timezone(input: str, channel_id: int, user_id: int, user_name: str, u
 def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response|None:
     command_name = input.strip()
     if command_name == '':
-        commands = [f"{COMMAND_PREFIX}{COMMAND_NAMES[i]}" for i in range(len(COMMAND_NAMES))]
+        commands = [f"`{COMMAND_PREFIX}{COMMAND_NAMES[i]}`" for i in range(len(COMMAND_NAMES))]
         return br.Response(
             title="Help:",
-            txt=f"All available commands: \n{"\n".join([f"`{command}`" for command in commands])}\n\n" +
+            txt=f"All available commands: \n{"\n".join(commands)}\n\n" +
                 f"To view detailed help for a command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} [your command]`"
         )
     if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]:
@@ -332,7 +332,7 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
             txt="This command sets your timezone, which will be used for all future reminders you add.\n\n"
                 "To use this command, use the format " +
                 f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]} [TZ identifier].` " +
-                "You can find your TZ identifier here https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#Time_zone_abbreviations.",
+                "You can find your TZ identifier [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#Time_zone_abbreviations).",
             notes=[f"You can get your current timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]]}` " +
                    f"and remove your timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]}`."]
         )
@@ -400,6 +400,6 @@ COMMAND_FUNCTIONS = [
 ]
 COMMAND_FUNCTIONS_INV = {c: i for i, c in enumerate(COMMAND_FUNCTIONS)}
 
-USE_HELP_NOTE = f"Use {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} to see the list of available commands."
-USE_HELP_COMMAND_NOTES = [f"Use {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} {COMMAND_NAMES[i]} to learn how to use {COMMAND_NAMES[i]}." 
+USE_HELP_NOTE = f"Use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]}` to see the list of available commands."
+USE_HELP_COMMAND_NOTES = [f"Use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} {COMMAND_NAMES[i]}` to learn how to use {COMMAND_NAMES[i]}." 
                           for i in range(len(COMMAND_NAMES))]

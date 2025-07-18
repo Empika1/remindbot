@@ -42,7 +42,7 @@ def add_reminder(name: str, channel_id: int, reply_message_id: int|None, user_id
     """, (name, channel_id))
     
     if cursor.fetchone() is not None:
-        raise ReminderAlreadyExistsError(f"Reminder with name '{name}' already exists in channel {channel_id}")
+        raise ReminderAlreadyExistsError(f"Reminder with name '{name}' already exists in this channel")
 
     start_timestamp = start_time.timestamp()
     cursor.execute("""
@@ -72,7 +72,7 @@ def remove_reminder(name: str, channel_id: int):
     
     row = cursor.fetchone()
     if row is None:
-        raise ReminderDoesntExistError(f"Reminder with name '{name}' doesn't exist in channel {channel_id}")
+        raise ReminderDoesntExistError(f"Reminder with name '{name}' doesn't exist in this channel")
 
     # Perform the deletion
     cursor.execute("""

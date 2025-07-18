@@ -254,14 +254,14 @@ def set_timezone(input: str, channel_id: int, user_id: int, user_name: str, user
     except:
         return br.Response(
             is_error = True,
-            title="Setting timezone failed:",
+            title=f"Setting timezone for user `{user_name}` failed:",
             txt=f"{tz_name} is not a valid timezone name.",
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[set_timezone]]]
         )
 
     bd.set_user_timezone(user_id, tz_name)
     return br.Response(
-        title=f"Set timezone to {tz_name}."
+        title=f"Set timezone for user `{user_name}` to {tz_name}."
     )
 
 def get_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
@@ -272,7 +272,7 @@ def get_timezone(input: str, channel_id: int, user_id: int, user_name: str, user
     except Exception as e:
         return br.Response(
             is_error = True,
-            title="Getting timezone failed:",
+            title=f"Getting timezone for user `{user_name}` failed:",
             txt=f"{str(e)}.",
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[get_timezone]]]
         )
@@ -283,15 +283,82 @@ def remove_timezone(input: str, channel_id: int, user_id: int, user_name: str, u
     except Exception as e:
         return br.Response(
             is_error=True,
-            title="Removing timezone failed:",
+            title=f"Removing timezone for user `{user_name}` failed:",
             txt=f"{str(e)}.",
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_timezone]]]
         )
     
-    return br.Response(title="User timezone removed.")
+    return br.Response(title=f"Timezone for user `{user_name}` removed.")
 
-def help(input: str, channel_id: int, user_id: int, reply_message_id: int|None) -> br.Response|None:
-    return br.Response(title="Help:")
+def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response|None:
+    command_name = input.strip()
+    if command_name == '':
+        commands = [f"{COMMAND_PREFIX}{COMMAND_NAMES[i]}" for i in range(len(COMMAND_NAMES))]
+        return br.Response(
+            title="Help:",
+            txt=f"All available commands: \n{"\n".join([f"`{command}`" for command in commands])}\n\n" +
+                f"To view detailed help for a command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]} [your command]`"
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]}:",
+            txt="This command adds a reminder to the current channel.\n\n" +
+                "To use this command, use the format " +
+                f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]} [name of reminder] time: [time of reminder] repeat: [repeat interval of reminder]`\n\n" +
+                "The format for time is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`. This format is very flexible: " +
+                "year can be omitted (or date can be omitted altogether), am/pm can be omitted to use 24 hour time, and month names can be abbreviated.\n\n"
+                "Repeat is optional. If specified, it is in the format `[integer number] [unit of time]`, where the unit of time can be minute, hour, day, week, month, or year. " +
+                "This format is also flexible: the unit of time can be abbreviated down to its first 2 letters.",
+            notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}",
+                   f"You can remove a reminder with `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}`"]
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]}:",
+            txt="This command removes a reminder from the current channel.\n\n" +
+                "To use this command, use the format " +
+                f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]} [name of reminder].` ",
+            notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}."]
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]]}:",
+            txt="This command lists the names of all reminders in this channel.\n\n" +
+                f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]]}`.",
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}:",
+            txt="This command sets your timezone, which will be used for all future reminders you add.\n\n"
+                "To use this command, use the format " +
+                f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]} [TZ identifier].` " +
+                "You can find your TZ identifier here https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#Time_zone_abbreviations.",
+            notes=[f"You can get your current timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]]}` " +
+                   f"and remove your timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]}`."]
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]]}:",
+            txt=f"This command gets your timezone, as set by `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}`.\n\n"
+                f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]]}`.",
+            notes=[f"You can remove your timezone with {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]}."]
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]}:",
+            txt=f"This command removes your timezone, as set by `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]]}`.\n\n"
+                f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]]}`."
+        )
+    if command_name == COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]}:",
+            txt="This is the help command."
+        )
+    return br.Response(
+        is_error=True,
+        title=f"Help failed: Command {command_name} does not exist.",
+        notes=[USE_HELP_NOTE]
+    )
 
 def parse_command(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response|None:
     if input[:len(COMMAND_PREFIX)] != COMMAND_PREFIX:

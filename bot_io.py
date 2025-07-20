@@ -312,7 +312,7 @@ def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, us
 
     reminder_strs = [format_reminder(r, user_tz) for r in reminders]
     return br.Response(
-        title=f"There are {len(reminders)} reminders in this channel:",
+        title=f"There are {len(reminders)} reminders in this channel:" if len(reminders) > 1 else "There is 1 reminder in this channel:",
         txt="\n".join(reminder_strs)
     )
 

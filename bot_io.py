@@ -382,7 +382,8 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
         return br.Response(
             title="Help:",
             txt=f"All available commands: \n{"\n".join(commands)}\n\n" +
-                f"To view detailed help for a command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]][0]} [your command]`"
+                f"To view detailed help for a command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]][0]} [your command]`",
+            warnings=[f"This bot is currently in early development. Things may change unexpectedly. Do not yet trust this bot for important reminders."]
         )
     if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]]:
         return br.Response(

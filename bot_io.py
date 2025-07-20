@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import re
 import calendar
-
 import discord
 import bot_timing as bt
 import bot_db as bd

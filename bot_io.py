@@ -387,7 +387,7 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
     if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]]:
         return br.Response(
             title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]}:",
-            txt="This command adds a reminder to the current channel.\n\n" +
+            txt="This command adds a reminder to the current channel, with an optional custom message.\n\n" +
                 "To use this command, use the format " +
                 f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]} [name of reminder] time: [time of reminder] repeat: [repeat interval of reminder]`\n\n" +
                 "Time can be specified as either absolute or relative. The format for absolute is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`, " +
@@ -395,6 +395,7 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
                 "The format for repeat is also `[integer number] [unit of time]`." +
                 "Time and repeat are both optional arguments, and their formats are extremely flexible. " +
                 "For example, most of the parts of the absolute time format can be omitted and inferred from the current time.\n\n" +
+                f"To add a custom message to your reminder, send the custom message and then reply to it when sending `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]}`.\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][1:])}`",
             notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}",
                    f"You can remove a reminder with `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`"]
@@ -418,7 +419,7 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
     if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]]:
         return br.Response(
             title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]][0]}:",
-            txt="This command lists the names of all reminders in this channel.\n\n" +
+            txt="This command lists the names and details of all reminders in this channel.\n\n" +
                 f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]][0]}`.\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]][1:])}`",
         )

@@ -35,7 +35,7 @@ START_RE = re.compile(
 def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     m = re.fullmatch(START_RE, start_str.lower())
     if m is None:
-        raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid)")
+        raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid).")
     
     day_str = m[1]
     month_abbr_str = m[2]
@@ -54,25 +54,25 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
         day = int(day_str)
         _, days_in_month = calendar.monthrange(year, month)
         if day == 0:
-            raise ZeroDayValueError("Start time day value is 0")
+            raise ZeroDayValueError("Start time day value is 0.")
         if day > days_in_month:
-            raise TooLargeDayValueError(f"Start time day value is too large for that month (day value is {day} and highest allowed day value is {days_in_month})")
+            raise TooLargeDayValueError(f"Start time day value is too large for that month (day value is {day} and highest allowed day value is {days_in_month}).")
         try:
             start = datetime(year, month, day, tzinfo=now.tzinfo)
         except:
-            raise InvalidDateError("Date is invalid")
+            raise InvalidDateError("Date is invalid.")
     
     #read in time
     hour = int(hour_str)
     min = int(min_str) if min_str is not None else 0
     if min > 59:
-        raise TooLargeMinuteValueError(f"Minute value is too large (minute value is {min} and highest allowed minute is 59)")
+        raise TooLargeMinuteValueError(f"Minute value is too large (minute value is {min} and highest allowed minute is 59).")
     is_12_hr = ampm_str is not None
     if is_12_hr:
         if hour == 0:
-            raise ZeroHourValueError("Hour value is 0 in 12 hour time (lowest allowed hour value is 1)")
+            raise ZeroHourValueError("Hour value is 0 in 12 hour time (lowest allowed hour value is 1).")
         if hour > 12:
-            raise TooLarge12HourValueError(f"Hour value is too large for 12 hour time (hour value is {hour} and highest allowed hour value is 12)")
+            raise TooLarge12HourValueError(f"Hour value is too large for 12 hour time (hour value is {hour} and highest allowed hour value is 12).")
 
         am = ampm_str.lower()[0] == 'a'
         if am:
@@ -83,14 +83,14 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
                 hour += 12
     else:
         if hour > 23:
-            raise TooLarge24HourValueError("Hour value is too large for 24 hour time (hour value is {hour} and highest allowed hour value is 23)")
+            raise TooLarge24HourValueError("Hour value is too large for 24 hour time (hour value is {hour} and highest allowed hour value is 23).")
     
     start = start.replace(hour=hour, minute=min, second=0, microsecond=0)
 
     if start < now:
         if day_str is None: #so you can specify a time in the next day without an annoying error
             start += timedelta(days=1)
-        raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)})")
+        raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)}).")
     
     return (start, is_12_hr)
 
@@ -104,12 +104,17 @@ REPEAT_RE = re.compile(r"\s*(\d*)\s*(mi|ho|da|we|mo|ye)\w*\s*")
 def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     m = re.fullmatch(REPEAT_RE, repeat_str.lower())
     if m is None:
-        raise InvalidRepeatStringError("Failed to parse repeat string")
+        raise InvalidRepeatStringError("Failed to parse repeat string.")
     n = int(m[1])
     if n == 0:
-        raise ZeroRepeatTimeError("Repeat time is 0")
+        raise ZeroRepeatTimeError("Repeat time is 0.")
     time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
     return (time_interval_index, n)
+
+class ZeroLengthNameError(Exception):
+    pass
+class TooLongNameError(Exception):
+    pass
 
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
@@ -150,6 +155,11 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
             repeat_str = input[repeat_index + len(repeat_arg):start_time_index]
         start_time, is_12_hr = parse_start_str(start_time_str, now)
         repeat_interval_index, n = parse_repeat_str(repeat_str)
+
+    if len(name) == 0:
+        raise ZeroLengthNameError("No name given.")
+    if len(name) > 64:
+        raise TooLongNameError(f"Name is too long (name length is {len(name)} characters and max length is 64 characters).")
 
     response = br.Response(
         title=f"Reminder '{name}' set{" with custom message" if reply_message_id is not None else ""}:",
@@ -198,7 +208,7 @@ def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
         return br.Response(
             is_error = True,
             title="Parsing reminder failed:",
-            txt=f"{str(e)}.",
+            txt=str(e),
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
         )
     
@@ -212,7 +222,7 @@ def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
         return br.Response(
             is_error = True,
             title="Adding reminder failed:",
-            txt=f"{str(e)}.",
+            txt=str(e),
             notes=notes
         )
     
@@ -387,7 +397,8 @@ def parse_command(input: str, channel_id: int, user_id: int, user_name: str, use
             notes=[USE_HELP_NOTE]
         )
     
-    command_args = input[len(COMMAND_PREFIX)+len(command_name):]
+    args_index = input.find(command_name) + len(command_name)
+    command_args = input[args_index:]
     return COMMAND_FUNCTIONS[command_index](command_args, channel_id, user_id, user_name, user_perms, reply_message_id)
 
 COMMAND_PREFIX = "!!"

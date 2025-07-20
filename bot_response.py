@@ -26,7 +26,7 @@ class Response:
 
         color = EMBED_COLOR_ERROR if self.is_error else EMBED_COLOR_WARNING if len(self.warnings) > 0 else EMBED_COLOR_GOOD
 
-        embed=discord.Embed(title=title,
-                            description=txt, 
+        embed=discord.Embed(title=title[:256], #slice because title cannot be longer than 64 chars
+                            description=txt[:4096], #title cannot be longer than 4096 chars
                             color=color)
         return embed

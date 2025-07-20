@@ -22,8 +22,8 @@ def weekday_to_int(name: str) -> int | None:
 def to_utc(dt: datetime):
     return dt.astimezone(UTC)
 
-def format_datetime(dt: datetime, is_12_hr: bool = False) -> str:
-    specifier = f"%A, %d %B %Y, {"%I:%M %p" if is_12_hr else "%H:%M"}"
+def format_datetime(dt: datetime, is_12_hr: bool = True) -> str:
+    specifier = f"%A, %d %B %Y, {"%-I:%M %p" if is_12_hr else "%H:%M"}"
     return dt.strftime(specifier)
 
 def n_minutes_later(now: datetime, n: int) -> datetime:

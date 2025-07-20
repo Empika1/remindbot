@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import re
 import calendar
@@ -131,6 +131,12 @@ class ZeroLengthNameError(Exception):
 class TooLongNameError(Exception):
     pass
 
+def format_repeat(repeat_interval_index: int, n: int) -> str:
+    if n != 1:
+        return f"{n} {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}s"
+    else:
+        return f"{bt.TIME_INTERVAL_NAMES[repeat_interval_index]}"
+
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
 def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None) -> tuple[datetime, int|None, int|None, str, br.Response]:
@@ -177,17 +183,14 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
         raise TooLongNameError(f"Name is too long (name length is {len(name)} characters and max length is 64 characters).")
 
     response = br.Response(
-        title=f"Reminder '{name}' set{" with custom message" if reply_message_id is not None else ""}:",
+        title=f"Reminder `{name}` set{" with custom message" if reply_message_id is not None else ""}:",
         txt=f"**Time:** {bt.format_datetime(start_time, is_12_hr)} {"local time" if user_has_tz else "UTC"}"
     )
     if start_time.tzinfo != bt.UTC:
         response.txt += f" ({bt.format_datetime(bt.to_utc(start_time), is_12_hr)} UTC)"
     response.txt += "."
     if repeat_interval_index is not None: #has repeat
-        if n != 1:
-            response.txt += f"\n**Repeat:** Every {n} {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}s."
-        else:
-            response.txt += f"\n**Repeat:** Every {bt.TIME_INTERVAL_NAMES[repeat_interval_index]}."
+        response.txt += f"\n**Repeat:** Every {format_repeat(repeat_interval_index, n)}." # type: ignore n can't be null at this point
 
     if repeat_interval_index == 3 and start_time.day > 28: #month
         response.warnings.append(f"Reminder is set to repeat per month, but some months have less than {start_time.day} days." +
@@ -252,7 +255,7 @@ def remove_reminder(input: str, channel_id: int, user_id: int, user_name: str, u
     name = input.strip()
 
     try:
-        bd.remove_reminder(name, channel_id) #TODO: verify perms somewhere!!!
+        bd.remove_reminder(name, channel_id)
     except Exception as e:
         return br.Response(
             is_error = True,
@@ -262,8 +265,34 @@ def remove_reminder(input: str, channel_id: int, user_id: int, user_name: str, u
         )
     
     return br.Response(
-        title=f"Removed reminder '{name}'."
+        title=f"Removed reminder `{name}`."
     )
+
+def remove_all_reminders(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
+    if not user_perms >= bp.EDIT_REMINDERS:
+        return bp.make_lacking_perms_response(f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_all_reminders]][0]}`",
+                                              user_name,
+                                              bp.EDIT_REMINDERS)
+    
+    try:
+        bd.remove_all_reminders(channel_id)
+    except Exception as e:
+        return br.Response(
+            is_error = True,
+            title="Removing all reminders failed:",
+            txt=f"{str(e)}.",
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_all_reminders]]]
+        )
+    
+    return br.Response(
+        title=f"Removed all reminders from this channel."
+    )
+
+def format_reminder(row: tuple[str, int, int|None, int, int, int, bool, int|None, int|None, int|None], user_tz: ZoneInfo) -> str:
+    #i looooove f-strings
+    return (f"`{row[0]}`: {bt.format_datetime(datetime.fromtimestamp(row[4], user_tz))}" +
+            f"{(f" | Repeats every {format_repeat(row[7], row[8])}" # type: ignore (relevant row values can't be null at this point)
+                f" | Next repeat: {bt.format_datetime(datetime.fromtimestamp(row[5], user_tz))}") if row[6] else ""}")
 
 def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     reminders = bd.get_all_reminders(channel_id)
@@ -272,10 +301,16 @@ def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, us
             title="There are no reminders in this channel."
         )
     
-    names = [r[0] for r in reminders]
+    user_tz = bt.UTC
+    try:
+        bd.get_user_timezone(user_id)
+    except:
+        pass
+
+    reminder_strs = [format_reminder(r, user_tz) for r in reminders]
     return br.Response(
-        title="All reminders in this channel:",
-        txt=", ".join(names)
+        title=f"There are {len(reminders)} reminders in this channel:",
+        txt="\n".join(reminder_strs)
     )
 
 def set_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
@@ -306,7 +341,8 @@ def get_timezone(input: str, channel_id: int, user_id: int, user_name: str, user
             is_error = True,
             title=f"Getting timezone for user `{user_name}` failed:",
             txt=f"{str(e)}.",
-            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[get_timezone]]]
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[get_timezone]],
+                   f"Consider setting your timezone with {COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]][0]}"]
         )
 
 def remove_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
@@ -353,6 +389,13 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
                 "To use this command, use the format " +
                 f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]} [name of reminder].`\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][1:])}`",
+            notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}."]
+        )
+    if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_all_reminders]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_all_reminders]][0]}:",
+            txt="This command removes all reminders from the current channel.\n\n" +
+                f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_all_reminders]][0]}`.",
             notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}."]
         )
     if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]]:
@@ -421,7 +464,8 @@ def parse_command(input: str, channel_id: int, user_id: int, user_name: str, use
 COMMAND_PREFIX = "!!"
 COMMAND_NAMES = [ #1st is canonical name, rest are aliases
     ["set_reminder", "add_reminder", "remind", "sr", "ar"],
-    ["remove_reminder", "delete_reminder", "rr"],
+    ["remove_reminder", "delete_reminder", "rr", "dr"],
+    ["remove_all_reminders"], #no aliases because you don't want to typo this
     ["list_reminders", "lr"],
     ["set_timezone", "set_tz", "st"],
     ["get_timezone", "get_tz", "gt"],
@@ -432,6 +476,7 @@ COMMAND_NAMES_INV = {c: i for i, cl in enumerate(COMMAND_NAMES) for c in cl}
 COMMAND_FUNCTIONS = [
     set_reminder,
     remove_reminder,
+    remove_all_reminders,
     list_reminders,
     set_timezone,
     get_timezone,

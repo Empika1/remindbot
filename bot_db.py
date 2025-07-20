@@ -80,9 +80,18 @@ def remove_reminder(name: str, channel_id: int):
     """, (name, channel_id))
     conn.commit()
 
-def get_all_reminders(channel_id: int) -> list:
+def remove_all_reminders(channel_id: int):
     cursor.execute("""
-        SELECT name FROM reminders WHERE channel_id = ?
+        DELETE FROM reminders WHERE channel_id = ?
+    """, (channel_id,))
+    conn.commit()
+
+def get_all_reminders(channel_id: int) -> list[tuple[str, int, int|None, int, int, int, bool, int|None, int|None, int|None]]:
+    cursor.execute("""
+        SELECT name, channel_id, reply_message_id, setter_user_id, start_timestamp, next_timestamp,
+            has_repeat, repeat_interval_index, repeat_interval_increment, repeat_increment_count 
+        FROM reminders 
+        WHERE channel_id = ?
     """, (channel_id,))
     return cursor.fetchall()
 
@@ -124,7 +133,7 @@ def remove_user_timezone(user_id: int):
     conn.commit()
 
 
-def get_due_reminders(now: datetime) -> list[tuple[str, int, int|None, int, int, int, bool, int, int, int]]:
+def get_due_reminders(now: datetime) -> list[tuple[str, int, int|None, int, int, int, bool, int|None, int|None, int|None]]:
     cursor.execute("""
         SELECT name, channel_id, reply_message_id, setter_user_id, start_timestamp, next_timestamp,
                has_repeat, repeat_interval_index, repeat_interval_increment, repeat_increment_count 

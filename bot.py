@@ -91,17 +91,29 @@ async def event_loop():
                     title=f"Reminder: {name}"
                 )
 
+                reply_errs = []
                 reply_message = None
                 if reply_message_id is not None:
                     try:
                         reply_message = await channel.fetch_message(reply_message_id) # type: ignore
                     except discord.NotFound as e: #The reply was deleted #TODO: figure out if there is any other way for this exception to be raised
-                        reminder_response.warnings.append("The custom message for this reminder was deleted.")
-
+                        reply_errs.append("The custom message for this reminder was deleted.")
+    
                 await channel.send(embed=reminder_response.make_embed()) # type: ignore
 
                 if reply_message is not None:
-                    await channel.send(**await copy_message(reply_message)) # type: ignore
+                    try:
+                        await channel.send(**await copy_message(reply_message)) # type: ignore
+                    except discord.HTTPException as e:
+                        reply_errs.append("The custom message for this reminder cannot be copied.")
+                
+                if len(reply_errs) > 0:
+                    reply_err_msg = br.Response(
+                        is_error=True,
+                        title=f"Custom Message Failed:",
+                        txt=f"{" ".join(reply_errs)}"
+                    )
+                    await channel.send(embed=reply_err_msg.make_embed()) # type: ignore
             
                 bd.update_reminder(name, channel_id, now)
         except Exception as e:

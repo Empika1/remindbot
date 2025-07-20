@@ -90,6 +90,7 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     if start < now:
         if day_str is None: #so you can specify a time in the next day without an annoying error
             start += timedelta(days=1)
+    if start < now:
         raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)}).")
     
     return (start, is_12_hr)

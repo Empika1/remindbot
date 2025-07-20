@@ -262,7 +262,8 @@ def remove_reminder(input: str, channel_id: int, user_id: int, user_name: str, u
             is_error = True,
             title="Removing reminder failed:",
             txt=f"{str(e)}.",
-            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_reminder]]]
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[remove_reminder]],
+                   f"To see the reminders in this channel, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[list_reminders]][0]}`"]
         )
     
     return br.Response(

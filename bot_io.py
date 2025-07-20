@@ -111,9 +111,6 @@ def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
     time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
     return (time_interval_index, n)
 
-class NoTimeParameterError(Exception):
-    pass
-
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
 def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None) -> tuple[datetime, int|None, int|None, str, br.Response]:
@@ -121,28 +118,38 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
     repeat_arg = "repeat:"
 
     start_time_index = input.find(start_time_arg)
-    if start_time_index == -1:
-        raise NoTimeParameterError("No start time given")
+    repeat_index = input.find(repeat_arg)
 
     name = ""
-    repeat_index = input.find(repeat_arg)
-    start_time_str = ""
+    start_time, is_12_hr = None, None
     repeat_interval_index = None
     n = None
-    if repeat_index == -1:
-        start_time_str = input[start_time_index + len(start_time_arg):]
+    if start_time_index == -1 and repeat_index == -1:
+        name = input.strip()
+        start_time = now
+        is_12_hr = False
+    elif start_time_index == -1 and repeat_index != -1:
+        name = input[:repeat_index].strip()
+        start_time = now
+        is_12_hr = False
+        repeat_str = input[repeat_index + len(repeat_arg):].strip()
+        repeat_interval_index, n = parse_repeat_str(repeat_str)
+    elif start_time_index != -1 and repeat_index == -1:
         name = input[:start_time_index].strip()
+        start_time_str = input[start_time_index + len(start_time_arg):]
+        start_time, is_12_hr = parse_start_str(start_time_str, now)
     else:
-        repeat_str = ""
+        name = input[:min(start_time_index, repeat_index)].strip()
+        start_time_str = None
+        repeat_str = None
         if start_time_index < repeat_index:
             start_time_str = input[start_time_index + len(start_time_arg):repeat_index]
             repeat_str = input[repeat_index + len(repeat_arg):]
         else:
             start_time_str = input[start_time_index + len(start_time_arg):]
             repeat_str = input[repeat_index + len(repeat_arg):start_time_index]
+        start_time, is_12_hr = parse_start_str(start_time_str, now)
         repeat_interval_index, n = parse_repeat_str(repeat_str)
-        name = input[:min(start_time_index, repeat_index)].strip()
-    start_time, is_12_hr = parse_start_str(start_time_str, now)
 
     response = br.Response(
         title=f"Reminder '{name}' set{" with custom message" if reply_message_id is not None else ""}:",
@@ -305,10 +312,9 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
             txt="This command adds a reminder to the current channel.\n\n" +
                 "To use this command, use the format " +
                 f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][0]} [name of reminder] time: [time of reminder] repeat: [repeat interval of reminder]`\n\n" +
-                "The format for time is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`. This format is very flexible: " +
-                "year can be omitted (or date can be omitted altogether), am/pm can be omitted to use 24 hour time, and month names can be abbreviated.\n\n"
-                "Repeat is optional. If specified, it is in the format `[integer number] [unit of time]`, where the unit of time can be minute, hour, day, week, month, or year. " +
-                "This format is also flexible: the unit of time can be abbreviated down to its first 2 letters.\n\n" +
+                "The format for time is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`.\n"
+                "The format for repeat is `[integer number] [unit of time]`, where the unit of time can be minute, hour, day, week, month, or year." +
+                "Time and repeat are both optional arguments, and their formats are extremely flexible.\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][1:])}`",
             notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}",
                    f"You can remove a reminder with `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`"]

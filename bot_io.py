@@ -137,6 +137,10 @@ def format_repeat(repeat_interval_index: int, n: int) -> str:
     else:
         return f"{bt.TIME_INTERVAL_NAMES[repeat_interval_index]}"
 
+def format_local_and_UTC_time(time: datetime, is_12_hr: bool, user_has_tz: bool):
+    return (f"**Time:** {bt.format_datetime(time, is_12_hr)} {"local time" if user_has_tz else "UTC"}" + 
+            f"{f" ({bt.format_datetime(bt.to_utc(time), is_12_hr)} UTC)"}" if time.tzinfo != bt.UTC else "")
+
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
 def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None) -> tuple[datetime, int|None, int|None, str, br.Response]:
@@ -184,10 +188,8 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
 
     response = br.Response(
         title=f"Reminder `{name}` set{" with custom message" if reply_message_id is not None else ""}:",
-        txt=f"**Time:** {bt.format_datetime(start_time, is_12_hr)} {"local time" if user_has_tz else "UTC"}"
+        txt=f"**Time:** {format_local_and_UTC_time(start_time, is_12_hr, user_has_tz)}"
     )
-    if start_time.tzinfo != bt.UTC:
-        response.txt += f" ({bt.format_datetime(bt.to_utc(start_time), is_12_hr)} UTC)"
     response.txt += "."
     if repeat_interval_index is not None: #has repeat
         response.txt += f"\n**Repeat:** Every {format_repeat(repeat_interval_index, n)}." # type: ignore n can't be null at this point
@@ -303,7 +305,8 @@ def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, us
     
     user_tz = bt.UTC
     try:
-        bd.get_user_timezone(user_id)
+        user_tz_str = bd.get_user_timezone(user_id)
+        user_tz = ZoneInfo(user_tz_str)
     except:
         pass
 
@@ -334,7 +337,7 @@ def set_timezone(input: str, channel_id: int, user_id: int, user_name: str, user
 def get_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     try:
         return br.Response(
-            title=f"User timezone is {bd.get_user_timezone(user_id)}."
+            title=f"Timezone for user `{user_name}` is {bd.get_user_timezone(user_id)}."
         )
     except Exception as e:
         return br.Response(
@@ -357,6 +360,21 @@ def remove_timezone(input: str, channel_id: int, user_id: int, user_name: str, u
         )
     
     return br.Response(title=f"Timezone for user `{user_name}` removed.")
+
+def current_time(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
+    user_tz = bt.UTC
+    user_has_tz = False
+    try:
+        user_tz_str = bd.get_user_timezone(user_id)
+        user_tz = ZoneInfo(user_tz_str)
+        user_has_tz = True
+    except:
+        pass
+
+    return br.Response(
+        title=f"Current time for user `{user_name}`:",
+        txt=f"{format_local_and_UTC_time(datetime.now(user_tz), True, user_has_tz)}."
+    )
 
 def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response|None:
     command_name = input.strip()
@@ -431,6 +449,14 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
                 f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]][0]}`.\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]][1:])}`"
         )
+    if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[current_time]]:
+        return br.Response(
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[current_time]][0]}:",
+            txt=f"This command gets your current time, according to the timezone set by `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]][0]}`.\n\n" +
+                f"To use this command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[current_time]][0]}`.\n\n" +
+                f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[current_time]][1:])}`",
+            notes=[f"You can remove your timezone with {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]][0]}."]
+        )
     if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]]:
         return br.Response(
             title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]][0]}:",
@@ -470,6 +496,7 @@ COMMAND_NAMES = [ #1st is canonical name, rest are aliases
     ["set_timezone", "set_tz", "st"],
     ["get_timezone", "get_tz", "gt"],
     ["remove_timezone", "delete_timezone", "remove_tz", "delete_tz", "rt"],
+    ["current_time", "my_time", "time", "ct", "mt"],
     ["help"]
 ]
 COMMAND_NAMES_INV = {c: i for i, cl in enumerate(COMMAND_NAMES) for c in cl}
@@ -481,6 +508,7 @@ COMMAND_FUNCTIONS = [
     set_timezone,
     get_timezone,
     remove_timezone,
+    current_time,
     help,
 ]
 COMMAND_FUNCTIONS_INV = {c: i for i, c in enumerate(COMMAND_FUNCTIONS)}

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
 class ReminderAlreadyExistsError(Exception):
     pass
 
-def add_reminder(name: str, channel_id: int, reply_message_id: int|None, user_id: int,
+def set_reminder(name: str, channel_id: int, reply_message_id: int|None, user_id: int,
                  start_time: datetime, repeat_interval_index: int|None, repeat_interval_increment: int|None):
     cursor.execute("""
         SELECT 1 FROM reminders WHERE name = ? AND channel_id = ?

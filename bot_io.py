@@ -9,6 +9,33 @@ import bot_db as bd
 import bot_response as br
 import bot_permissions as bp
 
+class InvalidTimeDurationStringError(Exception):
+    pass
+
+TIME_DURATION_RE = re.compile(r"\s*(\d*)\s*(mi|ho|da|we|mo|ye)\w*\s*")
+#tuple of (time_interval_index, n (like in n_months_later))
+def parse_time_duration_str(time_duration_str: str) -> tuple[int, int]:
+    m = re.fullmatch(TIME_DURATION_RE, time_duration_str.lower())
+    if m is None:
+        raise InvalidTimeDurationStringError("Failed to parse time duration string.")
+    n = int(m[1])
+    time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
+    return (time_interval_index, n)
+
+class InvalidRepeatStringError(Exception):
+    pass
+class ZeroRepeatTimeError(Exception):
+    pass
+
+def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
+    try:
+        time_interval_index, n = parse_time_duration_str(repeat_str)
+        if n == 0:
+            raise ZeroRepeatTimeError("Repeat time is 0.")
+        return time_interval_index, n
+    except InvalidTimeDurationStringError:
+        raise InvalidRepeatStringError("Failed to parse repeat string.")
+
 class InvalidStartTimeStringError(Exception):
     pass
 class ZeroDayValueError(Exception):
@@ -28,14 +55,18 @@ class TooLarge12HourValueError(TooLargeHourValueError):
 class TooLarge24HourValueError(TooLargeHourValueError):
     pass
 
-START_RE = re.compile(
+ABSOLUTE_TIME_RE = re.compile(
     r'\s*(?:(\d+)\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d\d\d\d)?)?\s*(\d?\d)\s*(?::\s*(\d\d))?\s*([ap]m)?\s*'
 )
 #returns tuple of (start_time, is_12_hr)
 def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
-    m = re.fullmatch(START_RE, start_str.lower())
+    m = re.fullmatch(ABSOLUTE_TIME_RE, start_str.lower())
     if m is None:
-        raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid).")
+        try:
+            time_interval_index, n = parse_time_duration_str(start_str)
+            return (bt.TIME_INTERVAL_FUNCTIONS[time_interval_index](now, n), False)
+        except Exception:
+            raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid).")
     
     day_str = m[1]
     month_abbr_str = m[2]
@@ -94,23 +125,6 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
         raise ValueError(f"Start is before the current time (current time is {bt.format_datetime(now, is_12_hr)} and start time is {bt.format_datetime(start, is_12_hr)}).")
     
     return (start, is_12_hr)
-
-class InvalidRepeatStringError(Exception):
-    pass
-class ZeroRepeatTimeError(Exception):
-    pass
-
-REPEAT_RE = re.compile(r"\s*(\d*)\s*(mi|ho|da|we|mo|ye)\w*\s*")
-#tuple of (time_interval_index, n (like in n_months_later))
-def parse_repeat_str(repeat_str: str) -> tuple[int, int]:
-    m = re.fullmatch(REPEAT_RE, repeat_str.lower())
-    if m is None:
-        raise InvalidRepeatStringError("Failed to parse repeat string.")
-    n = int(m[1])
-    if n == 0:
-        raise ZeroRepeatTimeError("Repeat time is 0.")
-    time_interval_index = bt.TIME_INTERVAL_ABBREVIATIONS_INV[m[2]]
-    return (time_interval_index, n)
 
 class ZeroLengthNameError(Exception):
     pass
@@ -185,9 +199,9 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
 
     return (start_time, repeat_interval_index, n, name, response)
 
-def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
+def set_reminder(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
     if not user_perms >= bp.EDIT_REMINDERS:
-        return bp.make_lacking_perms_response(f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][0]}`",
+        return bp.make_lacking_perms_response(f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]}`",
                                               user_name,
                                               bp.EDIT_REMINDERS)
 
@@ -210,13 +224,13 @@ def add_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
             is_error = True,
             title="Parsing reminder failed:",
             txt=str(e),
-            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
+            notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[set_reminder]]]
         )
     
     try:
-        bd.add_reminder(name, channel_id, reply_message_id, user_id, start_time, repeat_interval_index, repeat_interval_increment)
+        bd.set_reminder(name, channel_id, reply_message_id, user_id, start_time, repeat_interval_index, repeat_interval_increment)
     except Exception as e:
-        notes = [USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[add_reminder]]]
+        notes = [USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[set_reminder]]]
         if isinstance(e, bd.ReminderAlreadyExistsError):
             notes.append(f"Note: You can remove a reminder using `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`.")
 
@@ -317,16 +331,18 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
             txt=f"All available commands: \n{"\n".join(commands)}\n\n" +
                 f"To view detailed help for a command, use `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[help]][0]} [your command]`"
         )
-    if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]]:
+    if command_name in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]]:
         return br.Response(
-            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][0]}:",
+            title=f"Help for {COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]}:",
             txt="This command adds a reminder to the current channel.\n\n" +
                 "To use this command, use the format " +
-                f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][0]} [name of reminder] time: [time of reminder] repeat: [repeat interval of reminder]`\n\n" +
-                "The format for time is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`.\n"
-                "The format for repeat is `[integer number] [unit of time]`, where the unit of time can be minute, hour, day, week, month, or year." +
-                "Time and repeat are both optional arguments, and their formats are extremely flexible.\n\n" +
-                f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[add_reminder]][1:])}`",
+                f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]} [name of reminder] time: [time of reminder] repeat: [repeat interval of reminder]`\n\n" +
+                "Time can be specified as either absolute or relative. The format for absolute is `[dd] [month name] [yyyy] [hh::mm] [am/pm]`, " +
+                "and the format for relative is `[integer number] [unit of time]`, where the unit of time can be minute, hour, day, week, month, or year.\n" +
+                "The format for repeat is also `[integer number] [unit of time]`." +
+                "Time and repeat are both optional arguments, and their formats are extremely flexible. " +
+                "For example, most of the parts of the absolute time format can be omitted and inferred from the current time.\n\n" +
+                f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][1:])}`",
             notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}",
                    f"You can remove a reminder with `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`"]
         )
@@ -404,7 +420,7 @@ def parse_command(input: str, channel_id: int, user_id: int, user_name: str, use
 
 COMMAND_PREFIX = "!!"
 COMMAND_NAMES = [ #1st is canonical name, rest are aliases
-    ["add_reminder", "set_reminder", "remind", "ar"],
+    ["set_reminder", "add_reminder", "remind", "sr", "ar"],
     ["remove_reminder", "delete_reminder", "rr"],
     ["list_reminders", "lr"],
     ["set_timezone", "set_tz", "st"],
@@ -414,7 +430,7 @@ COMMAND_NAMES = [ #1st is canonical name, rest are aliases
 ]
 COMMAND_NAMES_INV = {c: i for i, cl in enumerate(COMMAND_NAMES) for c in cl}
 COMMAND_FUNCTIONS = [
-    add_reminder,
+    set_reminder,
     remove_reminder,
     list_reminders,
     set_timezone,

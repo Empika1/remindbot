@@ -137,7 +137,7 @@ def format_repeat(repeat_interval_index: int, n: int) -> str:
         return f"{bt.TIME_INTERVAL_NAMES[repeat_interval_index]}"
 
 def format_local_and_UTC_time(time: datetime, is_12_hr: bool, user_has_tz: bool):
-    return (f"**Time:** {bt.format_datetime(time, is_12_hr)} {"local time" if user_has_tz else "UTC"}" + 
+    return (f"{bt.format_datetime(time, is_12_hr)} {"local time" if user_has_tz else "UTC"}" + 
             f"{f" ({bt.format_datetime(bt.to_utc(time), is_12_hr)} UTC)" if user_has_tz else ""}")
 
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)

@@ -9,12 +9,8 @@ import bot_permissions as bp
 import bot_log as bl
 
 token = ''
-try:
-    with open('token.txt', 'r') as f:
-        token = f.read()
-except OSError:
-    print("token.txt failed to be opened")
-    exit(1)
+with open('token.txt', 'r') as f:
+    token = f.read()
 
 intents = discord.Intents.default()
 intents.message_content = True

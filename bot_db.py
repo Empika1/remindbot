@@ -133,23 +133,56 @@ def get_due_reminders(now: datetime) -> list[tuple[str, int, int|None, int, int,
     """, (now.timestamp(),))
     return cursor.fetchall()
 
-def update_reminders(now: datetime):
+# def update_reminders(now: datetime):
+#     now_timestamp = now.timestamp()
+#     cursor.execute("""
+#         DELETE FROM reminders WHERE next_timestamp <= ? AND NOT has_repeat
+#     """, (now_timestamp,))
+#     conn.commit()
+
+#     cursor.execute("""
+#         SELECT name, channel_id, setter_user_id, start_timestamp, 
+#                repeat_interval_index, repeat_interval_increment, repeat_increment_count
+#         FROM reminders 
+#         WHERE next_timestamp <= ? AND has_repeat
+#     """, (now_timestamp,))
+#     repeating_reminders = cursor.fetchall()
+
+#     for (name, channel_id, setter_user_id, start_timestamp, 
+#          repeat_interval_index, repeat_interval_increment, repeat_increment_count) in repeating_reminders:
+#         new_repeat_interval_count = repeat_increment_count + 1
+
+#         cursor.execute("""
+#             SELECT timezone FROM users WHERE id = ?
+#         """, (setter_user_id,))
+#         timezone_row = cursor.fetchone()
+#         timezone_string = timezone_row[0] if timezone_row is not None else 'UTC'
+#         timezone = ZoneInfo(timezone_string)
+
+#         start_time = datetime.fromtimestamp(start_timestamp, timezone)
+#         next_time = bt.TIME_INTERVAL_FUNCTIONS[repeat_interval_index](start_time, repeat_interval_increment * new_repeat_interval_count)
+
+#         cursor.execute("""
+#             UPDATE reminders
+#             SET next_timestamp = ?, repeat_increment_count = ?
+#             WHERE name = ? AND channel_id = ?;
+#         """, (next_time.timestamp(), new_repeat_interval_count, name, channel_id))
+#         conn.commit()
+
+def update_reminder(name: str, channel_id: int, now: datetime):
     now_timestamp = now.timestamp()
-    cursor.execute("""
-        DELETE FROM reminders WHERE next_timestamp <= ? AND NOT has_repeat
-    """, (now_timestamp,))
-    conn.commit()
 
     cursor.execute("""
         SELECT name, channel_id, setter_user_id, start_timestamp, 
                repeat_interval_index, repeat_interval_increment, repeat_increment_count
         FROM reminders 
-        WHERE next_timestamp <= ? AND has_repeat
-    """, (now_timestamp,))
-    repeating_reminders = cursor.fetchall()
+        WHERE name == ? AND channel_id == ? AND next_timestamp <= ? AND has_repeat
+    """, (name, channel_id, now_timestamp))
+    repeating_reminder = cursor.fetchone()
 
-    for (name, channel_id, setter_user_id, start_timestamp, 
-         repeat_interval_index, repeat_interval_increment, repeat_increment_count) in repeating_reminders:
+    if repeating_reminder is not None:
+        (name, channel_id, setter_user_id, start_timestamp, 
+            repeat_interval_index, repeat_interval_increment, repeat_increment_count) = repeating_reminder
         new_repeat_interval_count = repeat_increment_count + 1
 
         cursor.execute("""
@@ -168,4 +201,8 @@ def update_reminders(now: datetime):
             WHERE name = ? AND channel_id = ?;
         """, (next_time.timestamp(), new_repeat_interval_count, name, channel_id))
         conn.commit()
-
+    else: #reminder must not have repeat, so delete it
+        cursor.execute("""
+            DELETE FROM reminders WHERE name == ? AND channel_id == ? AND next_timestamp <= ? AND NOT has_repeat
+        """, (name, channel_id, now_timestamp))
+        conn.commit()

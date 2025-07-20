@@ -67,22 +67,13 @@ async def on_message(message: discord.message.Message):
 
         await message.channel.send(embed=response.make_embed())
     except Exception as e:
-        bl.log_err(e) #for truly odd errors
-
-async def get_channel_or_dm(channel_id: int, user_id: int):
-    channel = await client.fetch_channel(channel_id)
-    if channel is None:
-        user = await client.fetch_user(user_id)
-        if user is None:
-            return None
-        channel = user.dm_channel
-    return channel
+        bl.log_err(e) 
 
 @tasks.loop(seconds=5)
 async def event_loop():
-    try:
-        now = datetime.now()
-        while True:
+    now = datetime.now()
+    while True: #so the bot can send multiple repeats of a reminder in one event loop
+        try:
             due_reminders = bd.get_due_reminders(now)
             if len(due_reminders) == 0:
                 break
@@ -92,9 +83,9 @@ async def event_loop():
                 # type ignores are because any channel in the database must be messageable already, so the type checking is busted
                 channel = None
                 try:
-                    channel = await get_channel_or_dm(channel_id, setter_user_id)
+                    channel = await client.fetch_channel(channel_id)
                 except discord.NotFound as e: #The channel was deleted #TODO: figure out if there is any other way for this exception to be raised
-                    bd.remove_reminder(name, channel_id) 
+                    bd.remove_reminder(name, channel_id) #reminder no longer applicable
 
                 reminder_response = br.Response(
                     title=f"Reminder: {name}"
@@ -112,10 +103,9 @@ async def event_loop():
                 if reply_message is not None:
                     await channel.send(**await copy_message(reply_message)) # type: ignore
             
-            bd.update_reminders(now)
-    except Exception as e:
-        bl.log_err(e) #for truly odd errors
-    
+                bd.update_reminder(name, channel_id, now)
+        except Exception as e:
+            bl.log_err(e) #for truly odd errors
 
 @client.event
 async def on_ready():

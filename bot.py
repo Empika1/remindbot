@@ -48,7 +48,10 @@ async def on_message(message: discord.message.Message):
             perms = bp.ADMIN
             #permissions don't matter in a dm channel
             if not isinstance(message.channel, discord.DMChannel):
-                perms = message.channel.permissions_for(cast(discord.Member, message.author)) #will always be a member if not in a dm channel
+                try:
+                    perms = message.channel.permissions_for(cast(discord.Member, message.author)) #will always be a member if not in a dm channel
+                except AttributeError as e:
+                    return #if you cant get perms dont even try replying to the message
 
             response = bi.parse_command(message.content, 
                                         message.channel.id, 

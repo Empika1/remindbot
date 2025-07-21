@@ -5,7 +5,7 @@ This is a discord bot for scheduling reminders. Made in Python using discord.py.
 - Repeating reminders
 - Reminders with custom messages attached
 - Extremely flexible format for reminder times
-- Discord permissions integration to allow/deny people from setting reminders
+- Discord permissions integration to allow/deny people from editing reminders
 - Setting timezones per-user
 - Lots of error handling
 

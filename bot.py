@@ -86,8 +86,11 @@ async def event_loop():
                 except discord.NotFound as e: #The channel was deleted #TODO: figure out if there is any other way for this exception to be raised
                     bd.remove_reminder(name, channel_id) #reminder no longer applicable
 
+                ping_text = f"<@!{setter_user_id}>"
+
                 reminder_response = br.Response(
-                    title=f"Reminder: {name}"
+                    title=f"Reminder: {name}",
+                    txt=ping_text
                 )
 
                 reply_errs = []
@@ -98,7 +101,9 @@ async def event_loop():
                     except discord.NotFound as e: #The reply was deleted #TODO: figure out if there is any other way for this exception to be raised
                         reply_errs.append("The custom message for this reminder was deleted.")
     
-                await channel.send(embed=reminder_response.make_embed()) # type: ignore
+                await channel.send(embed=reminder_response.make_embed()) # type: ignore 
+                ghost_ping_message = await channel.send(ping_text) # type: ignore 
+                await ghost_ping_message.delete()
 
                 if reply_message is not None:
                     try:

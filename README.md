@@ -11,7 +11,7 @@ This is a discord bot for scheduling reminders. Made in Python using discord.py.
 
 Here's a short showcase of what RemindBot can do:
 
-<img width="596" height="781" alt="image" src="https://github.com/user-attachments/assets/b801c804-3830-47e5-b4d6-c6e17ddc5f3b" />
+<img width="601" height="981" alt="setting my timezone, then setting a reminder with a custom message, then seeing the reminder" src="https://github.com/user-attachments/assets/1e25f8ba-45d3-46c1-8946-0c3bd48d51e3" />
 
 ## Future
 - Host the bot permanently on a server

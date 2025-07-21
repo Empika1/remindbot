@@ -142,7 +142,7 @@ def format_local_and_UTC_time(time: datetime, is_12_hr: bool, user_has_tz: bool)
 
 # tuple of (start_time, time_interval_index, n (like in n_months_later), name, response)
 # expects string in the format start [datetime] name [name] repeat [repeat] (optional)
-def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None) -> tuple[datetime, int|None, int|None, str, br.Response]:
+def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_message_id: int|None, user_name: str) -> tuple[datetime, int|None, int|None, str, br.Response]:
     input_lower = input.lower()
 
     start_time_arg = "time:"
@@ -200,7 +200,7 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
                               " On these months, the reminder will be shifted to the last day of the month.")
     
     if not user_has_tz:
-        response.notes.append(f"You have not set your timezone, so UTC is assumed. Consider setting your timezone with" +
+        response.notes.append(f"You ({user_name}) have not set your timezone, so UTC is assumed. Consider setting your timezone with" +
                               f" `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]][0]}`.")
 
     return (start_time, repeat_interval_index, n, name, response)
@@ -224,7 +224,7 @@ def set_reminder(input: str, channel_id: int, user_id: int, user_name: str, user
 
     start_time, repeat_interval_index, repeat_interval_increment, name, response = None, None, None, None, None
     try:
-        start_time, repeat_interval_index, repeat_interval_increment, name, response = parse_set_reminder(input, now, user_has_tz, reply_message_id)
+        start_time, repeat_interval_index, repeat_interval_increment, name, response = parse_set_reminder(input, now, user_has_tz, reply_message_id, user_name)
     except Exception as e:
         return br.Response(
             is_error = True,

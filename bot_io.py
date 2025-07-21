@@ -317,17 +317,18 @@ def list_reminders(input: str, channel_id: int, user_id: int, user_name: str, us
     )
 
 def set_timezone(input: str, channel_id: int, user_id: int, user_name: str, user_perms: discord.Permissions, reply_message_id: int|None) -> br.Response:
-    tz_name = input.strip()
+    tz_name_input = input.strip()
+    tz_name_lower = tz_name_input.lower()
 
-    try:
-        ZoneInfo(tz_name)
-    except:
+    if tz_name_lower not in bt.TIMEZONES_LOWERCASE:
         return br.Response(
             is_error = True,
             title=f"Setting timezone for user `{user_name}` failed:",
-            txt=f"{tz_name} is not a valid timezone name.",
+            txt=f"{tz_name_input} is not a valid timezone name.",
             notes=[USE_HELP_COMMAND_NOTES[COMMAND_FUNCTIONS_INV[set_timezone]]]
         )
+
+    tz_name = bt.TIMEZONES_LOWERCASE[tz_name_lower]
 
     bd.set_user_timezone(user_id, tz_name)
     return br.Response(
@@ -431,7 +432,8 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
             txt="This command sets your timezone, which will be used for all future reminders you add.\n\n"
                 "To use this command, use the format " +
                 f"`{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]][0]} [TZ identifier].` " +
-                "You can find your TZ identifier [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#Time_zone_abbreviations).\n\n" +
+                "You can find your TZ identifier [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#Time_zone_abbreviations).\n" +
+                "For example, your TZ identifier could be `America/Winnipeg` or `Europe/Kiev` or `Kwajalein`\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_timezone]][1:])}`",
             notes=[f"You can get your current timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[get_timezone]][0]}` " +
                    f"and remove your timezone with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_timezone]][0]}`."]

@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import calendar
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 
 UTC = ZoneInfo("UTC")
+
+TIMEZONES_LOWERCASE = {tz.lower(): tz for tz in available_timezones()}
 
 # Create mappings for full and short names
 FULL = {name.lower(): idx for idx, name in enumerate(calendar.day_name)}

@@ -404,7 +404,7 @@ def help(input: str, channel_id: int, user_id: int, user_name: str, user_perms: 
                 f"To add a custom message to your reminder, send the custom message and then reply to it when sending `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][0]}`.\n\n" +
                 f"Aliases of this command: `{", ".join(COMMAND_NAMES[COMMAND_FUNCTIONS_INV[set_reminder]][1:])}`",
             notes=[f"You must have the following permissions to use this command: {bp.make_permissions_list(bp.EDIT_REMINDERS)}",
-                   f"You can remove a reminder with `{COMMAND_PREFIX}{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`"]
+                   f"You can remove a reminder with `{COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]][0]}`"]
         )
     if command_name_lower in COMMAND_NAMES[COMMAND_FUNCTIONS_INV[remove_reminder]]:
         return br.Response(

@@ -63,7 +63,7 @@ def parse_start_str(start_str: str, now: datetime) -> tuple[datetime, bool]:
     if m is None:
         try:
             time_interval_index, n = parse_time_duration_str(start_str)
-            return (bt.TIME_INTERVAL_FUNCTIONS[time_interval_index](now, n), False)
+            return (bt.TIME_INTERVAL_FUNCTIONS[time_interval_index](now, n), True)
         except Exception:
             raise InvalidStartTimeStringError("Failed to parse start time string (format of start time given is invalid).")
     

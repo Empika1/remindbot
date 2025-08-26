@@ -195,7 +195,7 @@ def parse_set_reminder(input: str, now: datetime, user_has_tz: bool, reply_messa
     if repeat_interval_index is not None: #has repeat
         response.txt += f"\n**Repeat:** Every {format_repeat(repeat_interval_index, n)}." # type: ignore n can't be null at this point
 
-    if repeat_interval_index == 3 and start_time.day > 28: #month
+    if repeat_interval_index == bt.TIME_INTERVAL_NAMES_INV["month"] and start_time.day > 28: #month
         response.warnings.append(f"Reminder is set to repeat per month, but some months have less than {start_time.day} days." +
                               " On these months, the reminder will be shifted to the last day of the month.")
     

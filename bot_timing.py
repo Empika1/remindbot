@@ -54,6 +54,7 @@ def n_years_later(now: datetime, n: int) -> datetime:
 
 TIME_INTERVAL_FUNCTIONS = [n_minutes_later, n_hours_later, n_days_later, n_weeks_later, n_months_later, n_years_later]
 TIME_INTERVAL_NAMES = ["minute", "hour", "day", "week", "month", "year"]
+TIME_INTERVAL_NAMES_INV = {c: i for i, c in enumerate(TIME_INTERVAL_NAMES)}
 TIME_INTERVAL_ABBREVIATIONS = ["mi", "ho", "da", "we", "mo", "ye"]
 TIME_INTERVAL_ABBREVIATIONS_INV = {c: i for i, c in enumerate(TIME_INTERVAL_ABBREVIATIONS)}
 
